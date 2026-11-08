@@ -8,6 +8,7 @@ public enum ImageError: LocalizedError {
     case multiplePages
     case unsupportedPixels
     case invalidRow
+    case invalidPCTA(String)
 
     public var errorDescription: String? {
         switch self {
@@ -16,6 +17,7 @@ public enum ImageError: LocalizedError {
         case .unsupportedPixels:
             return "Use an 8-bit or 16-bit unsigned grayscale or RGB TIFF, without an alpha channel."
         case .invalidRow: return "The selected row is outside the image."
+        case .invalidPCTA(let reason): return "The file could not be read as a PC-TA image. \(reason)"
         }
     }
 }
@@ -26,8 +28,29 @@ public struct PixelImage {
     public let values: [Double]
     public let bitDepth: Int
     public let isColor: Bool
+    /// "TIFF" or "PC-TA image".
+    public let formatName: String
+    /// Date and time stored in a PC-TA header (the acquisition PC's clock);
+    /// nil for TIFF files and for PC-TA files with a blank date.
+    public let headerTimestamp: DateComponents?
 
+    init(width: Int, height: Int, values: [Double], bitDepth: Int, isColor: Bool,
+         formatName: String, headerTimestamp: DateComponents? = nil) {
+        self.width = width
+        self.height = height
+        self.values = values
+        self.bitDepth = bitDepth
+        self.isColor = isColor
+        self.formatName = formatName
+        self.headerTimestamp = headerTimestamp
+    }
+
+    /// Opens a TIFF, or a raw PC-TA `.img` file (by extension, case-insensitive).
     public init(contentsOf url: URL) throws {
+        if url.pathExtension.lowercased() == "img" {
+            self = try PCTAImage.read(try Data(contentsOf: url))
+            return
+        }
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let type = CGImageSourceGetType(source),
               UTType(type as String)?.conforms(to: .tiff) == true else {
@@ -72,6 +95,8 @@ public struct PixelImage {
         height = rotated ? image.width : image.height
         bitDepth = bits
         isColor = color
+        formatName = "TIFF"
+        headerTimestamp = nil
         var pixels = [Double](repeating: 0, count: width * height)
         for y in 0..<image.height {
             for x in 0..<image.width {

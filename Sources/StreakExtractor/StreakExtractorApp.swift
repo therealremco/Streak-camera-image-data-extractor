@@ -19,18 +19,19 @@ struct StreakExtractorApp: App {
 }
 
 struct ContentView: View {
+    private let locations = FilePanelLocations()
     @State private var image: PixelImage?
     @State private var preview: CGImage?
     @State private var sourceURL: URL?
     @State private var row = 0
     @State private var samples: [Double] = []
     @State private var errorMessage: String?
-    @State private var status = "Open a TIFF image to begin."
+    @State private var status = "Open a TIFF or PC-TA .img file to begin."
 
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Button("Open TIFF…", action: openImage)
+                Button("Open Image…", action: openImage)
                     .keyboardShortcut("o")
                 Text(sourceURL?.lastPathComponent ?? "Streak-camera data extractor")
                     .font(.headline)
@@ -43,7 +44,7 @@ struct ContentView: View {
             if let image, let preview {
                 HStack(alignment: .top, spacing: 24) {
                     VStack {
-                        Text("Image · \(image.width) × \(image.height)")
+                        Text("\(image.formatName) · \(image.width) × \(image.height)")
                             .font(.headline)
                         ImageSampler(image: preview, row: row, selectRow: selectRow)
                         Text("Click or drag to select a row. Preview contrast is auto-scaled.")
@@ -55,8 +56,7 @@ struct ContentView: View {
                         Text("Brightness · row \(row)")
                             .font(.headline)
                         ProfilePlot(samples: samples)
-                        Text(image.isColor ? "Y: RGB luminance (original \(image.bitDepth)-bit scale)" :
-                                "Y: original \(image.bitDepth)-bit pixel value")
+                        Text(valueDescription(image))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -83,11 +83,11 @@ struct ContentView: View {
                 }
             } else {
                 ContentUnavailableView {
-                    Label("Open a streak-camera TIFF", systemImage: "photo")
+                    Label("Open a streak-camera image", systemImage: "photo")
                 } description: {
                     Text("Select a horizontal row to inspect and export its pixel values.")
                 } actions: {
-                    Button("Open TIFF…", action: openImage)
+                    Button("Open Image…", action: openImage)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -122,9 +122,10 @@ struct ContentView: View {
 
     private func openImage() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.tiff]
+        panel.allowedContentTypes = [.tiff, UTType(filenameExtension: "img") ?? .data]
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
+        panel.directoryURL = locations.openDirectory
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let loaded = try PixelImage(contentsOf: url)
@@ -136,10 +137,23 @@ struct ContentView: View {
             sourceURL = url
             row = initialRow
             samples = initialSamples
+            locations.openDirectory = url.deletingLastPathComponent()
             status = "Row \(row) from top · \(loaded.width) samples · X starts at 0"
+            if let timestamp = loaded.headerTimestamp,
+               let date = Calendar(identifier: .gregorian).date(from: timestamp) {
+                status += " · header date \(date.formatted(date: .abbreviated, time: .standard))"
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func valueDescription(_ image: PixelImage) -> String {
+        if image.isColor { return "Y: RGB luminance (original \(image.bitDepth)-bit scale)" }
+        if image.formatName == "PC-TA image" {
+            return "Y: original 12-bit value, background-subtracted (can be negative)"
+        }
+        return "Y: original \(image.bitDepth)-bit pixel value"
     }
 
     private func saveData() {
@@ -147,10 +161,11 @@ struct ContentView: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.plainText]
         panel.nameFieldStringValue = "\(sourceURL.deletingPathExtension().lastPathComponent)_row\(row).txt"
-        panel.directoryURL = sourceURL.deletingLastPathComponent()
+        panel.directoryURL = locations.saveDirectory ?? sourceURL.deletingLastPathComponent()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try image.save(row: row, to: url)
+            locations.saveDirectory = url.deletingLastPathComponent()
             status = "Saved row \(row): \(url.path)"
         } catch {
             errorMessage = error.localizedDescription
@@ -186,7 +201,7 @@ struct ImageSampler: View {
                 .gesture(DragGesture(minimumDistance: 0).onChanged { value in
                     selectRow(Int(floor(value.location.y / scale)))
                 })
-                .accessibilityLabel("TIFF image with sampling line on row \(row)")
+                .accessibilityLabel("Image with sampling line on row \(row)")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
