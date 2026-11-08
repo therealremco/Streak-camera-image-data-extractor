@@ -1,7 +1,6 @@
-# Streak-camera TIFF data extractor
+# Streak-camera image data extractor
 
-A lightweight native macOS app written in Swift/SwiftUI. No Python runtime,
-web server, or third-party dependencies are required.
+A lightweight native macOS app written in Swift/SwiftUI.
 
 <img src="/Resources/screenshot.png" alt="screensgit" style="height:416px; width:606px;">
 
@@ -15,7 +14,7 @@ swift run StreakExtractor
 ```
 
 Click **Open Image…** (Command-O) and select a TIFF or a raw PC-TA `.img` file,
-for example `docs/examples/12OKTR2.TIF` or `docs/examples/12OKTR2.IMG`.
+for example `/Resources/12OKTR2.TIF` or `/Resources/12OKTR2.IMG`.
 
 - The image is on the left; its sampled brightness profile is on the right.
 - Click or drag vertically on the image to move the red sampling line.
