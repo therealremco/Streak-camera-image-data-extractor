@@ -3,6 +3,8 @@
 A lightweight native macOS app written in Swift/SwiftUI. No Python runtime,
 web server, or third-party dependencies are required.
 
+<img src="/Resources/screenshot.png" alt="screensgit" style="height:416px; width:606px;">
+
 ## Run
 
 Requires macOS 14 or newer and Xcode Command Line Tools (Swift 5.9 or newer).
